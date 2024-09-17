@@ -28,8 +28,130 @@ enrolled.
 11. Find the names of students not enrolled in any class.
 12. For each age value that appears in Students, find the level value that appears most often. For example, if there are more FR level students aged 18 than SR, JR, or SO students aged 18, you should print the pair (18, FR).
 
-#### `Answer`
+#### `Answers`
+### Exercise 5.1
 
+1. **Find the names of all Juniors (level = JR) who are enrolled in a class taught by I. Teach.**
+   ```sql
+   SELECT DISTINCT S.sname
+   FROM Student S, Enrolled E, Class C, Faculty F
+   WHERE S.snum = E.snum AND E.cname = C.name AND C.fid = F.fid AND S.level = 'JR' AND F.fname = 'I. Teach';
+   ```
+
+2. **Find the age of the oldest student who is either a History major or enrolled in a course taught by I. Teach.**
+   ```sql
+   SELECT MAX(S.age)
+   FROM Student S
+   WHERE S.major = 'History' OR S.snum IN (
+       SELECT E.snum
+       FROM Enrolled E, Class C, Faculty F
+       WHERE E.cname = C.name AND C.fid = F.fid AND F.fname = 'I. Teach'
+   );
+   ```
+
+3. **Find the names of all classes that either meet in room R128 or have five or more students enrolled.**
+   ```sql
+   SELECT DISTINCT C.name
+   FROM Class C
+   WHERE C.room = 'R128'
+   UNION
+   SELECT C.name
+   FROM Class C, Enrolled E
+   WHERE C.name = E.cname
+   GROUP BY C.name
+   HAVING COUNT(E.snum) >= 5;
+   ```
+
+4. **Find the names of all students who are enrolled in two classes that meet at the same time.**
+   ```sql
+   SELECT DISTINCT S.sname
+   FROM Student S, Enrolled E1, Enrolled E2, Class C1, Class C2
+   WHERE S.snum = E1.snum AND S.snum = E2.snum AND E1.cname = C1.name AND E2.cname = C2.name AND C1.meets_at = C2.meets_at AND C1.name <> C2.name;
+   ```
+
+5. **Find the names of faculty members who teach in every room in which some class is taught.**
+   ```sql
+   SELECT F.fname
+   FROM Faculty F
+   WHERE NOT EXISTS (
+       SELECT C.room
+       FROM Class C
+       WHERE NOT EXISTS (
+           SELECT *
+           FROM Class C2
+           WHERE C2.room = C.room AND C2.fid = F.fid
+       )
+   );
+   ```
+
+6. **Find the names of faculty members for whom the combined enrollment of the courses that they teach is less than five.**
+   ```sql
+   SELECT F.fname
+   FROM Faculty F, Class C
+   WHERE F.fid = C.fid
+   GROUP BY F.fname
+   HAVING SUM((SELECT COUNT(*) FROM Enrolled E WHERE E.cname = C.name)) < 5;
+   ```
+
+7. **Print the level and the average age of students for that level, for each level.**
+   ```sql
+   SELECT S.level, AVG(S.age)
+   FROM Student S
+   GROUP BY S.level;
+   ```
+
+8. **Print the level and the average age of students for that level, for all levels except JR.**
+   ```sql
+   SELECT S.level, AVG(S.age)
+   FROM Student S
+   WHERE S.level <> 'JR'
+   GROUP BY S.level;
+   ```
+
+9. **For each faculty member that has taught classes only in room R128, print the faculty member's name and the total number of classes she or he has taught.**
+   ```sql
+   SELECT F.fname, COUNT(*)
+   FROM Faculty F, Class C
+   WHERE F.fid = C.fid AND C.room = 'R128'
+   GROUP BY F.fname
+   HAVING COUNT(DISTINCT C.room) = 1;
+   ```
+
+10. **Find the names of students enrolled in the maximum number of classes.**
+    ```sql
+    SELECT S.sname
+    FROM Student S
+    WHERE S.snum IN (
+        SELECT E.snum
+        FROM Enrolled E
+        GROUP BY E.snum
+        HAVING COUNT(E.cname) = (
+            SELECT MAX(Cnt)
+            FROM (SELECT COUNT(E2.cname) AS Cnt FROM Enrolled E2 GROUP BY E2.snum) AS MaxCnt
+        )
+    );
+    ```
+
+11. **Find the names of students not enrolled in any class.**
+    ```sql
+    SELECT S.sname
+    FROM Student S
+    WHERE S.snum NOT IN (SELECT E.snum FROM Enrolled E);
+    ```
+
+12. **For each age value that appears in Students, find the level value that appears most often.**
+    ```sql
+    SELECT S.age, S.level
+    FROM Student S
+    GROUP BY S.age, S.level
+    HAVING S.level = (
+        SELECT TOP 1 S2.level
+        FROM Student S2
+        WHERE S2.age = S.age
+        GROUP BY S2.level
+        ORDER BY COUNT(S2.level) DESC
+    );
+    ```
 ***
 ### Exercise 5.2
 Consider the following schema:  
@@ -52,6 +174,120 @@ Write the following queries in SQL:
 11. For every supplier that supplies a green part and a reel part, print the name and price of the most expensive part that she supplies.
 
 #### `Answer`
+### Exercise 5.2
+
+1. **Find the pnames of parts for which there is some supplier.**
+   ```sql
+   SELECT DISTINCT P.pname
+   FROM Parts P, Catalog C
+   WHERE P.pid = C.pid;
+   ```
+
+2. **Find the snames of suppliers who supply every part.**
+   ```sql
+   SELECT S.sname
+   FROM Suppliers S
+   WHERE NOT EXISTS (
+       SELECT P.pid
+       FROM Parts P
+       WHERE NOT EXISTS (
+           SELECT *
+           FROM Catalog C
+           WHERE C.sid = S.sid AND C.pid = P.pid
+       )
+   );
+   ```
+
+3. **Find the snames of suppliers who supply every red part.**
+   ```sql
+   SELECT S.sname
+   FROM Suppliers S
+   WHERE NOT EXISTS (
+       SELECT P.pid
+       FROM Parts P
+       WHERE P.color = 'red' AND NOT EXISTS (
+           SELECT *
+           FROM Catalog C
+           WHERE C.sid = S.sid AND C.pid = P.pid
+       )
+   );
+   ```
+
+4. **Find the pnames of parts supplied by Acme Widget Suppliers and no one else.**
+   ```sql
+   SELECT P.pname
+   FROM Parts P, Catalog C, Suppliers S
+   WHERE P.pid = C.pid AND C.sid = S.sid AND S.sname = 'Acme Widget Suppliers'
+   AND NOT EXISTS (
+       SELECT *
+       FROM Catalog C2
+       WHERE C2.pid = P.pid AND C2.sid <> S.sid
+   );
+   ```
+
+5. **Find the sids of suppliers who charge more for some part than the average cost of that part.**
+   ```sql
+   SELECT DISTINCT C.sid
+   FROM Catalog C
+   WHERE C.cost > (SELECT AVG(C2.cost) FROM Catalog C2 WHERE C2.pid = C.pid);
+   ```
+
+6. **For each part, find the sname of the supplier who charges the most for that part.**
+   ```sql
+   SELECT P.pname, S.sname
+   FROM Parts P, Suppliers S, Catalog C
+   WHERE P.pid = C.pid AND C.sid = S.sid
+   AND C.cost = (SELECT MAX(C2.cost) FROM Catalog C2 WHERE C2.pid = P.pid);
+   ```
+
+7. **Find the sids of suppliers who supply only red parts.**
+   ```sql
+   SELECT DISTINCT S.sid
+   FROM Suppliers S
+   WHERE NOT EXISTS (
+       SELECT P.pid
+       FROM Parts P, Catalog C
+       WHERE P.pid = C.pid AND C.sid = S.sid AND P.color <> 'red'
+   );
+   ```
+
+8. **Find the sids of suppliers who supply a red part and a green part.**
+   ```sql
+   SELECT DISTINCT C.sid
+   FROM Catalog C, Parts P1, Parts P2
+   WHERE C.pid = P1.pid AND P1.color = 'red'
+   AND C.sid IN (
+       SELECT C2.sid
+       FROM Catalog C2, Parts P2
+       WHERE C2.pid = P2.pid AND P2.color = 'green'
+   );
+   ```
+
+9. **Find the sids of suppliers who supply a red part or a green part.**
+   ```sql
+   SELECT DISTINCT C.sid
+   FROM Catalog C, Parts P
+   WHERE P.pid = C.pid AND (P.color = 'red' OR P.color = 'green');
+   ```
+
+10. **For every supplier that only supplies green parts, print the name of the supplier and the total number of parts that she supplies.**
+    ```sql
+    SELECT S.sname, COUNT(*)
+    FROM Suppliers S, Catalog C, Parts P
+    WHERE S.sid = C.sid AND C.pid = P.pid AND P.color = 'green'
+    GROUP BY S.sname
+    HAVING COUNT(DISTINCT P.color) = 1;
+    ```
+
+11. **For every supplier that supplies a green part and a red part, print the name and price of the most expensive part that she supplies.**
+    ```sql
+    SELECT S.sname, MAX(C.cost)
+    FROM Suppliers S, Catalog C, Parts P
+    WHERE S.sid = C.sid AND C.pid = P.pid AND (P.color = 'red' OR P.color = 'green')
+    GROUP BY S.sname
+    HAVING COUNT(DISTINCT P.color) = 2;
+    ```
+
 
 ***
 ### Exercise 5.3
@@ -80,6 +316,121 @@ Note that the Employees relation describes pilots and other kinds of employees a
 14. Print the names of employees who are certified only on aircrafts with cruising range longer than 1000 miles and who are certified on some Boeing aircraft.
 
 #### `Answer`
+### Exercise 5.3
+
+1. **Find the names of aircraft such that all pilots certified to operate them earn more than $80,000.**
+   ```sql
+   SELECT A.aname
+   FROM Aircraft A
+   WHERE NOT EXISTS (
+       SELECT C.eid
+       FROM Certified C, Employees E
+       WHERE C.aid = A.aid AND C.eid = E.eid AND E.salary <= 80000
+   );
+   ```
+
+2. **For each pilot who is certified for more than three aircraft, find the eid and the maximum cruisingrange of the aircraft for which she or he is certified.**
+   ```sql
+   SELECT C.eid, MAX(A.cruisingrange)
+   FROM Certified C, Aircraft A
+   WHERE C.aid = A.aid
+   GROUP BY C.eid
+   HAVING COUNT(C.aid) > 3;
+   ```
+
+3. **Find the names of pilots whose salary is less than the price of the cheapest route from Los Angeles to Honolulu.**
+   ```sql
+   SELECT E.ename
+   FROM Employees E
+   WHERE E.salary < (
+       SELECT MIN(F.price)
+       FROM Flights F
+       WHERE F.from = 'Los Angeles' AND F.to = 'Honolulu'
+   );
+   ```
+
+4. **For all aircraft with cruisingrange over 1000 miles, find the name of the aircraft and the average salary of all pilots certified for this aircraft.**
+   ```sql
+   SELECT A.aname, AVG(E.salary)
+   FROM Aircraft A, Certified C, Employees E
+   WHERE A.aid = C.aid AND C.eid = E.eid AND A.cruisingrange > 1000
+   GROUP BY A.aname;
+   ```
+
+5. **Find the names of pilots certified for some Boeing aircraft.**
+   ```sql
+   SELECT DISTINCT E.ename
+   FROM Employees E, Certified C, Aircraft A
+   WHERE E.eid = C.eid AND C.aid = A.aid AND A.aname LIKE 'Boeing%';
+   ```
+
+6. **Find the aids of all aircraft that can be used on routes from Los Angeles to Chicago.**
+   ```sql
+   SELECT A.aid
+   FROM Aircraft A, Flights F
+   WHERE F.from = 'Los Angeles' AND F.to = 'Chicago' AND A.cruisingrange >= F.distance;
+   ```
+
+7. **Identify the routes that can be piloted by every pilot who makes more than $100,000.**
+   ```sql
+   SELECT F.flno
+   FROM Flights F
+   WHERE NOT EXISTS (
+       SELECT E.eid
+       FROM Employees E
+       WHERE E.salary > 100000 AND NOT EXISTS (
+           SELECT C.aid
+           FROM Certified C, Aircraft A
+           WHERE E.eid = C.eid AND C.aid = A.aid AND A.cruisingrange >= F.distance
+       )
+   );
+   ```
+
+8. **Print the enames of pilots who can operate planes with cruisingrange greater than 3000 miles but are not certified on any Boeing aircraft.**
+   ```sql
+   SELECT DISTINCT E.ename
+   FROM Employees E, Certified C, Aircraft A
+   WHERE E.eid = C.eid AND A.aid = C.aid AND A.cruisingrange > 3000 AND E.eid NOT IN (
+       SELECT C2.eid
+       FROM Certified C2, Aircraft A2
+       WHERE C2.aid = A2.aid AND A2.aname LIKE 'Boeing%'
+   );
+   ```
+
+9. **List the choice of departure times from Madison if the customer wants to arrive in New York by 6 p.m. with no more than two changes of flight.**
+   ```sql
+   SELECT F1.departs
+   FROM Flights F1, Flights F2
+   WHERE F1.from = 'Madison' AND F2.to = 'New York' AND F1.to = F2.from AND F2.arrives <= '18:00'
+   UNION
+   SELECT F.departs
+   FROM Flights F
+   WHERE F.from = 'Madison' AND F.to = 'New York' AND F.arrives <= '18:00';
+   ```
+
+10. **Compute the difference between the average salary of a pilot and the average salary of all employees (including pilots).**
+    ```sql
+    SELECT (SELECT AVG(E.salary) FROM Employees E, Certified C WHERE E.eid = C.eid) - (SELECT AVG(E.salary) FROM Employees E) AS SalaryDifference;
+    ```
+
+11. **Print the name and salary of every nonpilot whose salary is more than the average salary for pilots.**
+    ```sql
+    SELECT E.ename, E.salary
+    FROM Employees E
+    WHERE E.eid NOT IN (SELECT C.eid FROM Certified C)
+    AND E.salary > (SELECT AVG(E2.salary) FROM Employees E2, Certified C2 WHERE E2.eid = C2.eid);
+    ```
+
+12. **Print the names of employees who are certified only on aircrafts with cruising range longer than 1000 miles.**
+    ```sql
+    SELECT E.ename
+    FROM Employees E
+    WHERE NOT EXISTS (
+        SELECT C.aid
+        FROM Certified C, Aircraft A
+        WHERE C.eid = E.eid AND C.aid = A.aid AND A.cruisingrange <= 1000
+    );
+    ```
 
 ***
 ### Exercise 5.4
@@ -101,6 +452,73 @@ and the Software department.
 8. Find the enames of managers who manage only departments with budgets larger than $1 million, but at least one department with budget less than $5 million.
 
 #### `Answer`
+### Exercise 5.4
+
+1. **Find the pids of parts that are supplied by at least two different suppliers.**
+   ```sql
+   SELECT C.pid
+   FROM Catalog C
+   GROUP BY C.pid
+   HAVING COUNT(DISTINCT C.sid) >= 2;
+   ```
+
+2. **Find the pids of parts that are supplied by every supplier who supplies part P2.**
+   ```sql
+   SELECT C1.pid
+   FROM Catalog C1
+   WHERE NOT EXISTS (
+       SELECT C2.sid
+       FROM Catalog C2
+       WHERE C2.pid = 'P2' AND NOT EXISTS (
+           SELECT C3.pid
+           FROM Catalog C3
+           WHERE C3.pid = C1.pid AND C3.sid = C2.sid
+       )
+   );
+   ```
+
+3. **Find the pids of the most expensive parts supplied by suppliers named Yosemite Sham.**
+   ```sql
+   SELECT C.pid
+   FROM Catalog C, Suppliers S
+   WHERE C.sid = S.sid AND S.sname = 'Yosemite Sham'
+   AND C.cost = (SELECT MAX(C2.cost) FROM Catalog C2 WHERE C2.sid = S.sid);
+   ```
+
+4. **Find the snames of suppliers who supply some red part or are at the same city as supplier S2.**
+   ```sql
+   SELECT DISTINCT S.sname
+   FROM Suppliers S, Parts P, Catalog C
+   WHERE (S.sid = C.sid AND C.pid = P.pid AND P.color = 'red')
+   OR S.city = (SELECT S2.city FROM Suppliers S2 WHERE S2.sid = 'S2');
+   ```
+
+5. **Find the snames of suppliers who supply every part supplied by supplier S1.**
+   ```sql
+   SELECT S.sname
+   FROM Suppliers S
+   WHERE NOT EXISTS (
+       SELECT C1.pid
+       FROM Catalog C1
+       WHERE C1.sid = 'S1' AND NOT EXISTS (
+           SELECT C2.pid
+           FROM Catalog C2
+           WHERE C2.sid = S.sid AND C2.pid = C1.pid
+       )
+   );
+   ```
+
+6. **Find the snames of suppliers who do not supply part P1.**
+   ```sql
+   SELECT S.sname
+   FROM Suppliers S
+   WHERE NOT EXISTS (
+       SELECT *
+       FROM Catalog C
+       WHERE C.sid = S.sid AND C.pid = 'P1'
+   );
+   ```
+
 
 ***
 ### Exercise 5.5
@@ -134,6 +552,104 @@ WHERE S2.age < 21
 (f) Show the full outer join of 81 with S2, with the join condition being sid=sid.  
 
 #### `Answer`
+### Exercise 5.5
+
+1. **Find the names of sailors who’ve reserved a red boat.**
+   ```sql
+   SELECT S.sname
+   FROM Sailors S, Boats B, Reserves R
+   WHERE S.sid = R.sid AND R.bid = B.bid AND B.color = 'red';
+   ```
+
+2. **Find the sids of sailors who’ve reserved a red or a green boat.**
+   ```sql
+   SELECT DISTINCT R.sid
+   FROM Reserves R, Boats B
+   WHERE R.bid = B.bid AND (B.color = 'red' OR B.color = 'green');
+   ```
+
+3. **Find the names of sailors who’ve reserved both a red and a green boat.**
+   ```sql
+   SELECT S.sname
+   FROM Sailors S
+   WHERE S.sid IN (
+       SELECT R1.sid
+       FROM Reserves R1, Boats B1
+       WHERE R1.bid = B1.bid AND B1.color = 'red'
+   )
+   AND S.sid IN (
+       SELECT R2.sid
+       FROM Reserves R2, Boats B2
+       WHERE R2.bid = B2.bid AND B2.color = 'green'
+   );
+   ```
+
+4. **Find the sids of sailors with age over 20 who’ve not reserved a red boat.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE S.age > 20
+   AND NOT EXISTS (
+       SELECT R.sid
+       FROM Reserves R, Boats B
+       WHERE S.sid = R.sid AND R.bid = B.bid AND B.color = 'red'
+   );
+   ```
+
+5. **Find the names of sailors who’ve reserved all boats.**
+   ```sql
+   SELECT S.sname
+   FROM Sailors S
+   WHERE NOT EXISTS (
+       SELECT B.bid
+       FROM Boats B
+       WHERE NOT EXISTS (
+           SELECT R.bid
+           FROM Reserves R
+           WHERE S.sid = R.sid AND R.bid = B.bid
+       )
+   );
+   ```
+
+6. **Find the sids of sailors who’ve reserved all red boats.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE NOT EXISTS (
+       SELECT B.bid
+       FROM Boats B
+       WHERE B.color = 'red' AND NOT EXISTS (
+           SELECT R.sid
+           FROM Reserves R
+           WHERE S.sid = R.sid AND R.bid = B.bid
+       )
+   );
+   ```
+
+7. **Find the names of sailors who’ve reserved at least two boats.**
+   ```sql
+   SELECT S.sname
+   FROM Sailors S, Reserves R
+   WHERE S.sid = R.sid
+   GROUP BY S.sname
+   HAVING COUNT(R.bid) >= 2;
+   ```
+
+8. **Find the names of sailors who’ve reserved a red boat and a green boat.**
+   ```sql
+   SELECT S.sname
+   FROM Sailors S
+   WHERE S.sid IN (
+       SELECT R1.sid
+       FROM Reserves R1, Boats B1
+       WHERE R1.bid = B1.bid AND B1.color = 'red'
+   )
+   AND S.sid IN (
+       SELECT R2.sid
+       FROM Reserves R2, Boats B2
+       WHERE R2.bid = B2.bid AND B2.color = 'green'
+   );
+   ```
 
 ***
 ### Exercise 5.6
@@ -152,6 +668,65 @@ Answer the following questions:
 12. Give an example of a situation that calls for dynamic 8QL; that is, even embedded SQL is not sufficient.
 
 #### `Answer`
+### Exercise 5.6
+
+1. **Find the sids of sailors who’ve reserved all boats.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE NOT EXISTS (
+       SELECT B.bid
+       FROM Boats B
+       WHERE NOT EXISTS (
+           SELECT R.bid
+           FROM Reserves R
+           WHERE S.sid = R.sid AND R.bid = B.bid
+       )
+   );
+   ```
+
+2. **Find the sids of sailors who’ve reserved all red boats.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE NOT EXISTS (
+       SELECT B.bid
+       FROM Boats B
+       WHERE B.color = 'red' AND NOT EXISTS (
+           SELECT R.sid
+           FROM Reserves R
+           WHERE S.sid = R.sid AND R.bid = B.bid
+       )
+   );
+   ```
+
+3. **Find the sids of sailors with age over 20 who’ve not reserved a red boat.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE S.age > 20
+   AND NOT EXISTS (
+       SELECT R.sid
+       FROM Reserves R, Boats B
+       WHERE S.sid = R.sid AND R.bid = B.bid AND B.color = 'red'
+   );
+   ```
+
+4. **Find the sids of sailors who’ve reserved a red and a green boat.**
+   ```sql
+   SELECT S.sid
+   FROM Sailors S
+   WHERE S.sid IN (
+       SELECT R1.sid
+       FROM Reserves R1, Boats B1
+       WHERE R1.bid = B1.bid AND B1.color = 'red'
+   )
+   AND S.sid IN (
+       SELECT R2.sid
+       FROM Reserves R2, Boats B2
+       WHERE R2.bid = B2.bid AND B2.color = 'green'
+   );
+   ```
 
 ***
 ### Exercise 5.7
