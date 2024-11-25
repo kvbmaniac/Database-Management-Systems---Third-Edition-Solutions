@@ -743,6 +743,55 @@ Dept (did.' integer, budget: real, managerid: integer)
 4. Write SQL statements to delete all information about employees whose salaries exceed that of the manager of one or more departments that they work in. Be sure to ensure that all the relevant integrity constraints are satisfied after your updates.
 
 #### `Answer`
+### **Exercise 5.7**
+
+#### **1. Define a table constraint on `Emp` to ensure every employee makes at least $10,000.**
+
+```sql
+ALTER TABLE Emp
+ADD CONSTRAINT min_salary CHECK (salary >= 10000);
+```
+
+#### **2. Define a table constraint on `Dept` to ensure all managers have age > 30.**
+
+```sql
+ALTER TABLE Dept
+ADD CONSTRAINT manager_age CHECK (
+  managerid IN (SELECT eid FROM Emp WHERE age > 30)
+);
+```
+
+#### **3. Define an assertion on `Dept` to ensure all managers have age > 30.**
+
+```sql
+CREATE ASSERTION manager_age_check
+CHECK (NOT EXISTS (
+  SELECT * 
+  FROM Dept d, Emp e 
+  WHERE d.managerid = e.eid AND e.age <= 30
+));
+```
+
+**Comparison**: The table constraint is applied directly to the `Dept` table, ensuring compliance at the time of data manipulation within that table. The assertion checks cross-table relationships. Assertions are more flexible but less supported and can lead to performance issues.
+
+#### **4. Delete employees whose salaries exceed their manager’s salary.**
+
+```sql
+DELETE FROM Emp
+WHERE salary > ANY (
+  SELECT e.salary
+  FROM Emp e, Dept d
+  WHERE e.eid = d.managerid AND Emp.eid IN (
+    SELECT eid
+    FROM Works
+    WHERE Works.did = d.did
+  )
+);
+```
+
+---
+
+
 
 ***
 ### Exercise 5.8
@@ -775,12 +824,133 @@ deletes, and updates on specific relations) must be monitored to enforce the con
 
 
 #### `Answer`
+### **Exercise 5.8**
+
+#### **1. SQL to create the relations with constraints.**
+
+```sql
+CREATE TABLE Student (
+  snum INTEGER PRIMARY KEY,
+  sname VARCHAR(50),
+  major VARCHAR(50),
+  level VARCHAR(20),
+  age INTEGER
+);
+
+CREATE TABLE Class (
+  name VARCHAR(50) PRIMARY KEY,
+  meets_at TIME,
+  room VARCHAR(50),
+  fid INTEGER,
+  FOREIGN KEY (fid) REFERENCES Faculty(fid)
+);
+
+CREATE TABLE Enrolled (
+  snum INTEGER,
+  cname VARCHAR(50),
+  PRIMARY KEY (snum, cname),
+  FOREIGN KEY (snum) REFERENCES Student(snum),
+  FOREIGN KEY (cname) REFERENCES Class(name)
+);
+
+CREATE TABLE Faculty (
+  fid INTEGER PRIMARY KEY,
+  fname VARCHAR(50),
+  deptid INTEGER
+);
+```
+
+#### **2. Constraints and operations monitoring.**
+
+1. **Minimum 5 and maximum 30 students per class.**
+   - Cannot enforce directly in SQL.
+   - Requires triggers or application-level logic to check `COUNT(*)` in `Enrolled`.
+
+2. **At least one class meets in each room.**
+   ```sql
+   CREATE ASSERTION room_check
+   CHECK (NOT EXISTS (
+     SELECT * 
+     FROM Class c
+     WHERE c.room NOT IN (SELECT DISTINCT room FROM Class)
+   ));
+   ```
+
+3. **Every faculty must teach at least two courses.**
+   - Use a trigger or application logic to enforce this.
+
+4. **Only faculty in `deptid=33` teach >3 courses.**
+   ```sql
+   CREATE ASSERTION faculty_course_limit
+   CHECK (NOT EXISTS (
+     SELECT fid 
+     FROM Class 
+     GROUP BY fid 
+     HAVING COUNT(name) > 3 AND fid NOT IN (
+       SELECT fid 
+       FROM Faculty WHERE deptid = 33
+     )
+   ));
+   ```
+
+5. **Every student must be enrolled in `Math101`.**
+   ```sql
+   CREATE ASSERTION student_must_enroll
+   CHECK (NOT EXISTS (
+     SELECT * 
+     FROM Student 
+     WHERE snum NOT IN (
+       SELECT snum FROM Enrolled WHERE cname = 'Math101'
+     )
+   ));
+   ```
+
+6. **Earliest and latest classes must meet in different rooms.**
+   ```sql
+   CREATE ASSERTION earliest_latest_room
+   CHECK ((SELECT room FROM Class WHERE meets_at = (SELECT MIN(meets_at) FROM Class)) <>
+         (SELECT room FROM Class WHERE meets_at = (SELECT MAX(meets_at) FROM Class)));
+   ```
+
+7. **Two classes cannot meet in the same room at the same time.**
+   ```sql
+   CREATE ASSERTION no_room_overlap
+   CHECK (NOT EXISTS (
+     SELECT c1.room, c1.meets_at
+     FROM Class c1, Class c2
+     WHERE c1.room = c2.room AND c1.meets_at = c2.meets_at AND c1.name <> c2.name
+   ));
+   ```
+
+---
+
+
 
 ***
 ### Exercise 5.9
 Discuss the strengths and weaknesses of the trigger mechanism. Contrast triggers with other integrity constraints supported by SQL.
 
 #### `Answer`
+### **Exercise 5.9**
+
+#### **Strengths and Weaknesses of Triggers**
+- **Strengths**:
+  - Automates complex validation logic.
+  - Ensures consistency and enforcement of business rules.
+  - Can react to specific events, such as updates or inserts.
+
+- **Weaknesses**:
+  - Difficult to debug and maintain, especially with multiple triggers on a table.
+  - Performance overhead, especially with complex triggers.
+  - Limited visibility compared to declarative constraints.
+
+**Contrast with Constraints**:
+- Constraints are simpler, more declarative, and easier to maintain.
+- Triggers allow for dynamic and complex logic but are harder to trace.
+
+---
+
+
 
 ***
 ### Exercise 5.10
@@ -800,5 +970,67 @@ Write SQL-92 integrity constraints (domain, key, foreign key, or CHECK constrain
 
 
 #### `Answer`
+### **Exercise 5.10**
+
+#### **1. Employees must make a minimum salary of $1000.**
+```sql
+ALTER TABLE Emp
+ADD CONSTRAINT min_salary CHECK (salary >= 1000);
+```
+
+#### **2. Every manager must also be an employee.**
+```sql
+ALTER TABLE Dept
+ADD CONSTRAINT manager_is_employee FOREIGN KEY (managerid) REFERENCES Emp(eid);
+```
+
+#### **3. Total percentage of appointments must be under 100%.**
+```sql
+CREATE ASSERTION total_pct_time
+CHECK (NOT EXISTS (
+  SELECT eid
+  FROM Works
+  GROUP BY eid
+  HAVING SUM(pct_time) > 100
+));
+```
+
+#### **4. Manager’s salary must exceed employees they manage.**
+```sql
+CREATE ASSERTION manager_salary_check
+CHECK (NOT EXISTS (
+  SELECT e1.salary, e2.salary
+  FROM Emp e1, Emp e2, Dept d
+  WHERE e1.eid = d.managerid AND e2.eid IN (
+    SELECT eid FROM Works WHERE did = d.did
+  ) AND e1.salary <= e2.salary
+));
+```
+
+#### **5. Raise manager’s salary when employee gets a raise.**
+```sql
+CREATE TRIGGER raise_manager_salary
+AFTER UPDATE OF salary ON Emp
+FOR EACH ROW
+WHEN (NEW.salary > OLD.salary)
+BEGIN
+  UPDATE Emp
+  SET salary = NEW.salary
+  WHERE eid IN (SELECT managerid FROM Dept WHERE managerid = NEW.eid);
+END;
+```
+
+#### **6. Raise department budget when an employee gets a raise.**
+```sql
+CREATE TRIGGER update_department_budget
+AFTER UPDATE OF salary ON Emp
+FOR EACH ROW
+WHEN (NEW.salary > OLD.salary)
+BEGIN
+  UPDATE Dept
+  SET budget = budget + (NEW.salary - OLD.salary)
+  WHERE managerid = NEW.eid;
+END;
+```
 
 ***
