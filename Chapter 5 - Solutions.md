@@ -35,7 +35,8 @@ enrolled.
    ```sql
    SELECT DISTINCT S.sname
    FROM Student S, Enrolled E, Class C, Faculty F
-   WHERE S.snum = E.snum AND E.cname = C.name AND C.fid = F.fid AND S.level = 'JR' AND F.fname = 'I. Teach';
+   WHERE S.snum = E.snum AND E.cname = C.name AND C.fid = F.fid AND S.level = 'JR' AND
+    F.fname = 'I. Teach';
    ```
 
 2. **Find the age of the oldest student who is either a History major or enrolled in a course taught by I. Teach.**
@@ -66,7 +67,8 @@ enrolled.
    ```sql
    SELECT DISTINCT S.sname
    FROM Student S, Enrolled E1, Enrolled E2, Class C1, Class C2
-   WHERE S.snum = E1.snum AND S.snum = E2.snum AND E1.cname = C1.name AND E2.cname = C2.name AND C1.meets_at = C2.meets_at AND C1.name <> C2.name;
+   WHERE S.snum = E1.snum AND S.snum = E2.snum AND E1.cname = C1.name AND E2.cname = C2.name AND
+    C1.meets_at = C2.meets_at AND C1.name <> C2.name;
    ```
 
 5. **Find the names of faculty members who teach in every room in which some class is taught.**
